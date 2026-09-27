@@ -12,7 +12,7 @@ namespace ProjectTD.Core
 
     /// <summary>
     /// Lives, currency and the win/loss result for one play session. Once the game is over,
-    /// nothing changes any more.
+    /// nothing changes any more: no income, no spending, no life loss.
     /// </summary>
     public class GameSession
     {
@@ -38,6 +38,18 @@ namespace ProjectTD.Core
                 return;
 
             Currency += amount;
+        }
+
+        public bool CanAfford(int amount) => !IsOver && amount >= 0 && Currency >= amount;
+
+        /// <summary>Deducts <paramref name="amount"/> if the game is still running and the player can afford it. Returns whether it did.</summary>
+        public bool TrySpend(int amount)
+        {
+            if (!CanAfford(amount))
+                return false;
+
+            Currency -= amount;
+            return true;
         }
 
         public void LoseLives(int amount)

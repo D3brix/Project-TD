@@ -63,6 +63,39 @@ namespace ProjectTD.Tests
         }
 
         [Test]
+        public void TrySpend_DeductsExactlyTheAmount_WhenAffordable()
+        {
+            var session = new GameSession(10, 50);
+
+            Assert.IsTrue(session.TrySpend(30));
+            Assert.AreEqual(20, session.Currency);
+        }
+
+        [Test]
+        public void TrySpend_IsRefused_AndChangesNothing_WhenUnaffordable()
+        {
+            var session = new GameSession(10, 20);
+
+            Assert.IsFalse(session.CanAfford(30));
+            Assert.IsFalse(session.TrySpend(30));
+            Assert.AreEqual(20, session.Currency);
+
+            Assert.IsTrue(session.TrySpend(20), "Spending exactly everything is allowed.");
+            Assert.AreEqual(0, session.Currency);
+        }
+
+        [Test]
+        public void AfterTheGameEnds_NothingCanBeSpent()
+        {
+            var session = new GameSession(1, 100);
+            session.LoseLives(1);
+
+            Assert.IsFalse(session.CanAfford(10));
+            Assert.IsFalse(session.TrySpend(10));
+            Assert.AreEqual(100, session.Currency);
+        }
+
+        [Test]
         public void Victory_IsRefused_WhileEnemiesOfTheFinalWaveRemain()
         {
             var session = new GameSession(10, 0);

@@ -64,6 +64,34 @@ namespace ProjectTD.Tests
         }
 
         [Test]
+        public void First_OnACurvedRoad_UsesDistanceAlongTheRoad_NotStraightLineDistanceToTheEnd()
+        {
+            // A horseshoe: up the left leg, over the top, down the right leg. The tower stands inside it.
+            Vector2[] horseshoe = ProjectTD.Levels.PathCurve.Sample(new[]
+            {
+                new Vector2(-2f, -3f), new Vector2(-2f, 1f), new Vector2(0f, 3f), new Vector2(2f, 1f), new Vector2(2f, -3f),
+            }, 0.1f);
+
+            Enemy onRightLeg = CreateEnemyOn(horseshoe, 12f);  // further along the road, near the end
+            Enemy onLeftLeg = CreateEnemyOn(horseshoe, 2.5f);  // just after the start
+
+            Enemy target = TargetSelector.Select(new[] { onLeftLeg, onRightLeg }, new Vector2(0f, -0.5f), 3f, TargetingMode.First);
+
+            Assert.AreSame(onRightLeg, target);
+            Assert.Greater(onRightLeg.PathProgress, onLeftLeg.PathProgress);
+        }
+
+        Enemy CreateEnemyOn(Vector2[] path, float distanceAlongPath)
+        {
+            var go = new GameObject("TestEnemy");
+            created.Add(go);
+            Enemy enemy = go.AddComponent<Enemy>();
+            enemy.Initialize(path);
+            enemy.Move(distanceAlongPath);
+            return enemy;
+        }
+
+        [Test]
         public void Ties_KeepTheEarlierEnemy()
         {
             Enemy first = CreateEnemyAt(10f);

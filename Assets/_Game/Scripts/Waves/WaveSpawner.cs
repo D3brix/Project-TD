@@ -16,19 +16,17 @@ namespace ProjectTD.Waves
     }
 
     /// <summary>
-    /// Runs the waves in order: spawns each wave's enemies at the path start, waits until the wave
-    /// is cleared, pauses, then starts the next. Also owns the list of living enemies that towers target.
+    /// Runs one wave at a time, only when asked (<see cref="StartNextWave"/>): spawns the wave's enemies at the
+    /// path start and reports when the wave is cleared. Also owns the list of living enemies that towers target.
     /// </summary>
     public class WaveSpawner : MonoBehaviour
     {
-        [SerializeField] WaypointPath path;
+        [SerializeField] LevelPath path;
         [SerializeField] Enemy enemyPrefab;
-        [SerializeField, Min(0f)] float firstWaveDelay = 2f;
-        [SerializeField, Min(0f)] float timeBetweenWaves = 3f;
         [SerializeField] WaveDefinition[] waves = { new WaveDefinition() };
 
         readonly List<Enemy> activeEnemies = new List<Enemy>();
-        Vector2[] waypoints;
+        bool halted;
 
         public event Action<int> WaveStarted;
         public event Action<int> WaveCompleted;
@@ -41,60 +39,60 @@ namespace ProjectTD.Waves
         public IReadOnlyList<Enemy> ActiveEnemies => activeEnemies;
         public int WaveCount => waves.Length;
 
-        /// <summary>One-based number of the current wave; 0 before the first wave starts.</summary>
+        /// <summary>One-based number of the current (or last finished) wave; 0 before the first wave starts.</summary>
         public int CurrentWaveNumber => Progress.CurrentWaveIndex + 1;
+
+        /// <summary>A wave has started and is not cleared yet (still spawning, or enemies still alive).</summary>
+        public bool IsWaveRunning => Progress.HasStarted && !Progress.IsCurrentWaveComplete;
+
+        public bool CanStartNextWave => !halted && Progress.HasMoreWaves && !IsWaveRunning;
 
         void Awake()
         {
             Progress = new WaveProgress(waves.Length);
-            waypoints = path.GetPoints();
         }
 
-        void Start()
+        /// <summary>Starts the next wave if none is running. Returns whether a wave started.</summary>
+        public bool StartNextWave()
         {
-            StartCoroutine(RunWaves());
+            if (!CanStartNextWave)
+                return false;
+
+            // BeginWave runs synchronously inside StartCoroutine, so a second call this frame is refused.
+            StartCoroutine(RunWave(waves[Progress.CurrentWaveIndex + 1]));
+            return true;
         }
 
-        /// <summary>Stops spawning further enemies. Enemies already on the map keep going.</summary>
-        public void StopSpawning()
+        /// <summary>Stops everything for good (the game is over): no more spawns, and enemies on the map freeze.</summary>
+        public void Halt()
         {
+            halted = true;
             StopAllCoroutines();
+            foreach (Enemy enemy in activeEnemies)
+                enemy.Halt();
         }
 
-        IEnumerator RunWaves()
+        IEnumerator RunWave(WaveDefinition wave)
         {
-            yield return new WaitForSeconds(firstWaveDelay);
+            Progress.BeginWave();
+            WaveStarted?.Invoke(CurrentWaveNumber);
 
-            foreach (WaveDefinition wave in waves)
+            for (int i = 0; i < wave.enemyCount; i++)
             {
-                Progress.BeginWave();
-                WaveStarted?.Invoke(CurrentWaveNumber);
-
-                for (int i = 0; i < wave.enemyCount; i++)
-                {
-                    if (i > 0)
-                        yield return new WaitForSeconds(wave.spawnInterval);
-                    Spawn(wave);
-                }
-
-                Progress.FinishSpawning();
-                yield return new WaitUntil(() => Progress.IsCurrentWaveComplete);
-                WaveCompleted?.Invoke(CurrentWaveNumber);
-
-                if (Progress.AreAllWavesComplete)
-                {
-                    AllWavesCompleted?.Invoke();
-                    yield break;
-                }
-
-                yield return new WaitForSeconds(timeBetweenWaves);
+                if (i > 0)
+                    yield return new WaitForSeconds(wave.spawnInterval);
+                Spawn(wave);
             }
+
+            // The last enemy was just spawned, so the wave cannot be complete yet:
+            // completion is detected when its final enemy is removed.
+            Progress.FinishSpawning();
         }
 
         void Spawn(WaveDefinition wave)
         {
-            Enemy enemy = Instantiate(enemyPrefab, waypoints[0], Quaternion.identity, transform);
-            enemy.Initialize(waypoints, wave.healthMultiplier);
+            Enemy enemy = Instantiate(enemyPrefab, path.Start, Quaternion.identity, transform);
+            enemy.Initialize(path.Points, wave.healthMultiplier);
             enemy.Killed += HandleEnemyKilled;
             enemy.ReachedEnd += HandleEnemyReachedEnd;
 
@@ -107,12 +105,14 @@ namespace ProjectTD.Waves
         {
             Remove(enemy);
             EnemyKilled?.Invoke(enemy);
+            CheckWaveComplete();
         }
 
         void HandleEnemyReachedEnd(Enemy enemy)
         {
             Remove(enemy);
             EnemyReachedEnd?.Invoke(enemy);
+            CheckWaveComplete();
         }
 
         void Remove(Enemy enemy)
@@ -121,6 +121,16 @@ namespace ProjectTD.Waves
             enemy.ReachedEnd -= HandleEnemyReachedEnd;
             activeEnemies.Remove(enemy);
             Progress.EnemyRemoved();
+        }
+
+        void CheckWaveComplete()
+        {
+            if (halted || !Progress.IsCurrentWaveComplete)
+                return;
+
+            WaveCompleted?.Invoke(CurrentWaveNumber);
+            if (Progress.AreAllWavesComplete)
+                AllWavesCompleted?.Invoke();
         }
     }
 }

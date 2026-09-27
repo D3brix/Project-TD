@@ -2,7 +2,8 @@
     "name": "ProjectTD",
     "rootNamespace": "ProjectTD",
     "references": [
-        "UnityEngine.UI"
+        "UnityEngine.UI",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

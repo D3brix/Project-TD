@@ -8,7 +8,7 @@ It starts as familiar tower defense and slowly shows how deep its rules go: elem
 
 ## Status
 
-**Phase 1: core prototype.** Open `Assets/_Game/Scenes/Development/Prototype.unity` and press Play: enemies walk a path in 3 waves, two pre-placed towers shoot them, kills earn currency, escaped enemies cost lives, and the game ends in VICTORY or DEFEAT. Placeholder art only. See [PROJECT_PLAN.md](PROJECT_PLAN.md) and [Docs/Architecture.md](Docs/Architecture.md).
+**Phase 2: first interactive level.** Open `Assets/_Game/Scenes/Development/Prototype.unity` and press Play. The map starts empty: click **Build Basic Tower**, move the ghost to a spot where its range covers the road, and click to build (right-click or Esc cancels). Press **Start Wave** when ready. Kills earn gold, which you spend on more towers or on upgrades. Click a tower to see its stats, upgrade it or sell it. Survive 5 waves; **Restart** reloads the level. Placeholder art only. See [PROJECT_PLAN.md](PROJECT_PLAN.md) and [Docs/Architecture.md](Docs/Architecture.md).
 
 ## Unity
 

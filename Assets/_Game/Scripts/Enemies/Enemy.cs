@@ -17,6 +17,7 @@ namespace ProjectTD.Enemies
 
         EnemyState state;
         PathFollower path;
+        bool halted;
 
         public event Action<Enemy> Killed;
         public event Action<Enemy> ReachedEnd;
@@ -31,11 +32,18 @@ namespace ProjectTD.Enemies
         /// <summary>How far this enemy has walked along its path. Larger means closer to the end.</summary>
         public float PathProgress => path?.DistanceTravelled ?? 0f;
 
-        public void Initialize(IReadOnlyList<Vector2> waypoints, float healthMultiplier = 1f)
+        /// <param name="pathPoints">The route as a polyline; for a level this is the densely sampled smooth curve.</param>
+        public void Initialize(IReadOnlyList<Vector2> pathPoints, float healthMultiplier = 1f)
         {
             state = new EnemyState(maxHealth * healthMultiplier);
-            path = new PathFollower(waypoints);
+            path = new PathFollower(pathPoints);
             transform.position = path.Position;
+        }
+
+        /// <summary>Freezes the enemy for good (the game is over): it stops moving and ignores damage.</summary>
+        public void Halt()
+        {
+            halted = true;
         }
 
         void Update()
@@ -45,7 +53,7 @@ namespace ProjectTD.Enemies
 
         internal void Move(float distance)
         {
-            if (!IsAlive)
+            if (!IsAlive || halted)
                 return;
 
             path.Advance(distance);
@@ -60,7 +68,7 @@ namespace ProjectTD.Enemies
 
         public void TakeDamage(float amount)
         {
-            if (state == null || !state.ApplyDamage(amount))
+            if (state == null || halted || !state.ApplyDamage(amount))
                 return;
 
             Killed?.Invoke(this);
