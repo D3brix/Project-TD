@@ -7,7 +7,8 @@ namespace ProjectTD.Towers
 {
     /// <summary>
     /// Re-picks a target every frame among the spawner's active enemies and fires a projectile
-    /// at it whenever the attack cooldown allows. Its stats come from its current <see cref="TowerLevel"/>.
+    /// at it whenever the attack cooldown allows. Its stats come from its current <see cref="TowerLevel"/>:
+    /// the base level, or a tier of the branch it was developed along (see <see cref="TowerProgression"/>).
     /// A tower does nothing until <see cref="Initialize"/> gives it an enemy source (placed towers only).
     /// </summary>
     public class Tower : MonoBehaviour
@@ -19,11 +20,15 @@ namespace ProjectTD.Towers
         [SerializeField] Transform rangeIndicator;
         [SerializeField] SpriteRenderer rangeFill;
         [SerializeField] SpriteRenderer rangeRing;
+        [SerializeField] SpriteRenderer baseSprite;
+        [SerializeField] Transform barrel;
 
         [Tooltip("Radius of the ground this tower occupies, for placement checks.")]
         [SerializeField, Min(0.1f)] float footprintRadius = 0.4f;
-        [Tooltip("Level 0 is the tower as built; its cost is the build price. Later levels are upgrades.")]
-        [SerializeField] TowerLevel[] levels = { new TowerLevel() };
+        [Tooltip("The tower as built; its cost is the build price.")]
+        [SerializeField] TowerLevel baseLevel = new TowerLevel();
+        [Tooltip("Development paths. The first upgrade commits the tower to one of them.")]
+        [SerializeField] TowerBranch[] branches = new TowerBranch[0];
         [SerializeField] TargetingMode targetingMode = TargetingMode.First;
 
         WaveSpawner enemySource;
@@ -32,8 +37,8 @@ namespace ProjectTD.Towers
 
         public string DisplayName => displayName;
         public float FootprintRadius => footprintRadius;
-        public int BuildCost => levels[0].cost;
-        public TowerProgression Progression => progression ??= new TowerProgression(levels);
+        public int BuildCost => baseLevel.cost;
+        public TowerProgression Progression => progression ??= new TowerProgression(baseLevel, branches);
         public TowerLevel Stats => Progression.Current;
         public float Range => Stats.range;
         public float Damage => Stats.damage;
@@ -48,13 +53,14 @@ namespace ProjectTD.Towers
             UpdateRangeIndicator();
         }
 
-        /// <summary>Applies the next level's stats. Paying for it is the caller's job.</summary>
-        internal bool ApplyUpgrade()
+        /// <summary>Applies the next tier of <paramref name="branchIndex"/>. Paying for it is the caller's job.</summary>
+        internal bool ApplyUpgrade(int branchIndex)
         {
-            if (!Progression.Upgrade())
+            if (!Progression.Upgrade(branchIndex))
                 return false;
 
             UpdateRangeIndicator();
+            UpdateBranchLook();
             return true;
         }
 
@@ -100,10 +106,31 @@ namespace ProjectTD.Towers
         {
             Vector3 spawnPosition = firePoint != null ? firePoint.position : transform.position;
             Projectile projectile = Instantiate(projectilePrefab, spawnPosition, Quaternion.identity);
+            // Bigger hits look bigger, so light and heavy towers read differently at a glance.
+            projectile.transform.localScale *= Mathf.Clamp(Mathf.Sqrt(Damage / baseLevel.damage), 0.75f, 2f);
             projectile.Launch(target, Damage);
 
             cooldown = AttackInterval;
             ShotsFired++;
+        }
+
+        /// <summary>A specialised tower takes its branch's colour and barrel, and grows a little with each tier.</summary>
+        void UpdateBranchLook()
+        {
+            TowerBranch branch = Progression.Branch;
+            if (branch == null)
+                return;
+
+            if (baseSprite != null)
+            {
+                baseSprite.color = branch.color;
+                baseSprite.transform.localScale = Vector3.one * (0.7f + 0.06f * Progression.Tier);
+            }
+            if (barrel != null)
+            {
+                barrel.localScale = new Vector3(branch.barrelScale.x, branch.barrelScale.y, 1f);
+                barrel.localPosition = new Vector3(branch.barrelScale.x / 2f, 0f, 0f);
+            }
         }
 
         void UpdateRangeIndicator()
@@ -114,16 +141,14 @@ namespace ProjectTD.Towers
 
         void OnValidate()
         {
-            if (levels == null || levels.Length == 0)
-                levels = new[] { new TowerLevel() };
-            if (rangeIndicator != null)
-                rangeIndicator.localScale = Vector3.one * (levels[0].range * 2f);
+            if (rangeIndicator != null && baseLevel != null)
+                rangeIndicator.localScale = Vector3.one * (baseLevel.range * 2f);
         }
 
         void OnDrawGizmosSelected()
         {
             Gizmos.color = Color.cyan;
-            Gizmos.DrawWireSphere(transform.position, Application.isPlaying ? Range : levels[0].range);
+            Gizmos.DrawWireSphere(transform.position, Application.isPlaying ? Range : baseLevel.range);
         }
     }
 }

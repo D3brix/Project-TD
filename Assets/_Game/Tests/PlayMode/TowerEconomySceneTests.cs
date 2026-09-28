@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using NUnit.Framework;
 using ProjectTD.Combat;
 using ProjectTD.Core;
@@ -21,7 +22,8 @@ namespace ProjectTD.Tests
             Assert.IsTrue(builder.CanAfford(towerPrefab));
             Assert.AreEqual(2, game.Session.Currency / towerPrefab.BuildCost,
                 "The opening buys two towers, or one tower and its first upgrade: a choice, not 'build everywhere'.");
-            Assert.LessOrEqual(towerPrefab.BuildCost + towerPrefab.Progression.Next.cost, game.Session.Currency);
+            for (int branch = 0; branch < towerPrefab.Progression.Branches.Count; branch++)
+                Assert.LessOrEqual(towerPrefab.BuildCost + towerPrefab.Progression.NextIn(branch).cost, game.Session.Currency);
         }
 
         [UnityTest]
@@ -115,91 +117,172 @@ namespace ProjectTD.Tests
         }
 
         [Test]
-        public void Upgrade_DeductsItsCost_AndChangesTheTowersStats()
+        public void TheTowerOffers_Rapid_Heavy_AndBalanced()
         {
-            Tower tower = Place(InsideHorseshoeSpot);
-            TowerLevel next = tower.Progression.Next;
-
-            Assert.IsTrue(builder.TryUpgrade(tower));
-
-            Assert.AreEqual(25 - next.cost, game.Session.Currency);
-            Assert.AreEqual(1, tower.Progression.LevelIndex);
-            Assert.AreEqual(next.damage, tower.Damage);
-            Assert.AreEqual(next.attackInterval, tower.AttackInterval);
-            Assert.AreEqual(next.range, tower.Range);
+            var branches = towerPrefab.Progression.Branches;
+            Assert.AreEqual(3, branches.Count);
+            Assert.AreEqual("Rapid", branches[Rapid].name);
+            Assert.AreEqual("Heavy", branches[Heavy].name);
+            Assert.AreEqual("Balanced", branches[Balanced].name);
+            foreach (TowerBranch branch in branches)
+                Assert.AreEqual(2, branch.tiers.Length);
         }
 
-        [Test]
-        public void UnaffordableUpgrade_IsRefused_AndCostsNothing()
+        [TestCase(Rapid)]
+        [TestCase(Heavy)]
+        [TestCase(Balanced)]
+        public void ChoosingABranch_ChargesItsCostOnce_AppliesItsStats_AndClosesTheOtherBranches(int chosen)
         {
+            game.Session.AddCurrency(500); // test setup: gold is not what stops the other branches
             Tower tower = Place(InsideHorseshoeSpot);
-            builder.TryUpgrade(tower); // 25 -> 5, and the next upgrade costs more than that
+            int currency = game.Session.Currency;
+            TowerLevel tier = tower.Progression.NextIn(chosen);
 
-            Assert.AreEqual(5, game.Session.Currency);
-            Assert.IsFalse(builder.CanUpgrade(tower));
-            Assert.IsFalse(builder.TryUpgrade(tower));
-            Assert.AreEqual(1, tower.Progression.LevelIndex);
+            Assert.IsTrue(builder.TryUpgrade(tower, chosen));
+
+            Assert.AreEqual(currency - tier.cost, game.Session.Currency);
+            Assert.AreEqual(chosen, tower.Progression.BranchIndex);
+            Assert.AreEqual(tier.damage, tower.Damage);
+            Assert.AreEqual(tier.attackInterval, tower.AttackInterval);
+            Assert.AreEqual(tier.range, tower.Range);
+            for (int other = 0; other < 3; other++)
+            {
+                if (other == chosen)
+                    continue;
+                Assert.IsFalse(builder.CanUpgrade(tower, other));
+                Assert.IsFalse(builder.TryUpgrade(tower, other), "Committed: the other branches are closed.");
+            }
+            Assert.AreEqual(currency - tier.cost, game.Session.Currency, "Refused upgrades cost nothing.");
+            Assert.AreEqual(tier.damage, tower.Damage);
         }
 
-        [Test]
-        public void EveryUpgradeStep_ChargesItsOwnCost_AndMaxLevelCannotBeBoughtAgain()
+        [TestCase(Rapid)]
+        [TestCase(Heavy)]
+        [TestCase(Balanced)]
+        public void TheSecondTier_FollowsTheBranch_AndTheLastTierCannotBeBoughtAgain(int chosen)
         {
             game.Session.AddCurrency(500); // test setup
             Tower tower = Place(InsideHorseshoeSpot);
+            builder.TryUpgrade(tower, chosen);
             int currency = game.Session.Currency;
+            TowerLevel second = tower.Progression.Branches[chosen].tiers[1];
 
-            while (!tower.Progression.IsMaxLevel)
+            Assert.IsTrue(builder.TryUpgrade(tower, chosen));
+            Assert.AreEqual(currency - second.cost, game.Session.Currency);
+            Assert.AreEqual(second.damage, tower.Damage);
+            Assert.AreEqual(second.attackInterval, tower.AttackInterval);
+            Assert.AreEqual(second.range, tower.Range);
+
+            Assert.IsTrue(tower.Progression.IsMaxLevel);
+            for (int branch = 0; branch < 3; branch++)
+                Assert.IsFalse(builder.TryUpgrade(tower, branch));
+            Assert.AreEqual(currency - second.cost, game.Session.Currency);
+        }
+
+        [Test]
+        public void UnaffordableUpgrades_AreRefused_AndCostNothing()
+        {
+            Place(InsideHorseshoeSpot);
+            Tower tower = Place(HorseshoeTopSpot);
+            Assert.AreEqual(0, game.Session.Currency);
+
+            for (int branch = 0; branch < 3; branch++)
             {
-                int cost = tower.Progression.Next.cost;
-                Assert.IsTrue(builder.TryUpgrade(tower));
-                Assert.AreEqual(currency - cost, game.Session.Currency);
-                currency = game.Session.Currency;
+                Assert.IsTrue(builder.IsUpgradeAvailable(tower, branch), "The branch is open, just not affordable.");
+                Assert.IsFalse(builder.CanUpgrade(tower, branch));
+                Assert.IsFalse(builder.TryUpgrade(tower, branch));
             }
+            Assert.IsFalse(tower.Progression.HasBranch, "A refused purchase does not commit the tower.");
+            Assert.AreEqual(0, game.Session.Currency);
+        }
 
-            Assert.AreEqual(4, tower.Progression.LevelCount);
-            Assert.IsFalse(builder.CanUpgrade(tower));
-            Assert.IsFalse(builder.TryUpgrade(tower));
-            Assert.AreEqual(currency, game.Session.Currency);
-            Assert.AreEqual(6f, tower.Damage);
-            Assert.AreEqual(0.45f, tower.AttackInterval);
-            Assert.AreEqual(3.6f, tower.Range);
+        [Test]
+        public void TheSpecialisations_DifferAsIntended()
+        {
+            var branches = towerPrefab.Progression.Branches;
+            TowerLevel basic = towerPrefab.Progression.Base;
+            for (int tier = 0; tier < 2; tier++)
+            {
+                TowerLevel rapid = branches[Rapid].tiers[tier], heavy = branches[Heavy].tiers[tier], balanced = branches[Balanced].tiers[tier];
+                Assert.AreEqual(rapid.cost, heavy.cost, "Compared at equal investment.");
+                Assert.AreEqual(rapid.cost, balanced.cost, "Compared at equal investment.");
+
+                Assert.Greater(rapid.AttacksPerSecond, 1.4f * balanced.AttacksPerSecond, "Rapid clearly fires fastest.");
+                Assert.Greater(rapid.AttacksPerSecond, 3f * heavy.AttacksPerSecond);
+                Assert.AreEqual(basic.damage, rapid.damage, "Rapid keeps light hits.");
+                Assert.Greater(heavy.damage, 2f * balanced.damage, "Heavy clearly hits hardest.");
+                Assert.Less(heavy.AttacksPerSecond, basic.AttacksPerSecond, "Heavy trades attack speed for hit damage.");
+
+                Assert.Greater(balanced.damage, rapid.damage, "Balanced sits between them.");
+                Assert.Less(balanced.damage, heavy.damage);
+                Assert.Greater(balanced.AttacksPerSecond, heavy.AttacksPerSecond);
+                Assert.Less(balanced.AttacksPerSecond, rapid.AttacksPerSecond);
+                Assert.Greater(balanced.range, rapid.range, "Balanced's own edge is reach.");
+                Assert.Less(balanced.DamagePerSecond, Mathf.Max(rapid.DamagePerSecond, heavy.DamagePerSecond), "Balanced is not simply better.");
+            }
         }
 
         [UnityTest]
-        public IEnumerator Upgrade_ChangesTheDamageActuallyDealt()
+        public IEnumerator Rapid_InRealCombat_FiresOftenWithLightShots() => ObserveCombat(Rapid);
+
+        [UnityTest]
+        public IEnumerator Heavy_InRealCombat_FiresRarelyWithHeavyShots() => ObserveCombat(Heavy);
+
+        [UnityTest]
+        public IEnumerator Balanced_InRealCombat_FiresAtItsOwnRateAndDamage() => ObserveCombat(Balanced);
+
+        /// <summary>Places a tower beside the spawn, commits it to <paramref name="branch"/> and watches it fight wave 1.</summary>
+        IEnumerator ObserveCombat(int branch)
         {
             Tower tower = Place(NearSpawnSpot);
-            Assert.IsTrue(builder.TryUpgrade(tower)); // Heavy Bolts: 3 -> 4.5 damage per hit
-            Assert.AreEqual(4.5f, tower.Damage);
+            Assert.IsTrue(builder.TryUpgrade(tower, branch));
+            TowerLevel tier = tower.Progression.Current;
 
-            Time.timeScale = 4f;
+            Time.timeScale = 2f;
             game.StartNextWave();
-            Enemy hit = null;
-            yield return WaitFor(() =>
+            var shotTimes = new List<float>();
+            var shotDamage = new List<float>();
+            float deadline = Time.time + 20f;
+            while (shotTimes.Count < 6 && Time.time < deadline)
             {
-                foreach (Enemy enemy in game.Waves.ActiveEnemies)
-                    if (enemy.Health < enemy.MaxHealth)
-                        hit = enemy;
-                return hit != null;
-            }, 30f);
+                int before = tower.ShotsFired;
+                yield return null;
+                if (tower.ShotsFired > before)
+                {
+                    shotTimes.Add(Time.time);
+                    foreach (Projectile projectile in Object.FindObjectsByType<Projectile>())
+                        shotDamage.Add(projectile.Damage);
+                }
+            }
 
-            Assert.AreEqual(4.5f, hit.MaxHealth - hit.Health, 1e-4f, "The first hit dealt the upgraded damage.");
+            Assert.GreaterOrEqual(shotTimes.Count, 3, "The tower kept firing.");
+            float shortestGap = float.MaxValue;
+            for (int i = 1; i < shotTimes.Count; i++)
+                shortestGap = Mathf.Min(shortestGap, shotTimes[i] - shotTimes[i - 1]);
+            TestContext.WriteLine($"{tier.label}: shortest gap between shots {shortestGap:0.00} s (interval {tier.attackInterval}), hits of {tier.damage}");
+            Assert.AreEqual(tier.attackInterval, shortestGap, 0.12f, "Shots come at the branch's attack interval.");
+            Assert.IsNotEmpty(shotDamage);
+            foreach (float damage in shotDamage)
+                Assert.AreEqual(tier.damage, damage, "Every shot carries the branch's hit damage.");
         }
 
         [UnityTest]
         public IEnumerator Selling_RefundsOnce_AndRemovesTheTower()
         {
+            game.Session.AddCurrency(100); // test setup
             Tower tower = Place(InsideHorseshoeSpot);
-            builder.TryUpgrade(tower);
-            Assert.AreEqual(5, game.Session.Currency);
+            builder.TryUpgrade(tower, Heavy);
+            builder.TryUpgrade(tower, Heavy);
+            int invested = 25 + 25 + 45;
+            Assert.AreEqual(150 - invested, game.Session.Currency);
             int refund = builder.SellValue(tower);
-            Assert.AreEqual((25 + 20) * 70 / 100, refund, "70% of everything invested, rounded down.");
+            Assert.AreEqual(invested * 70 / 100, refund, "70% of everything invested (build and both tiers), rounded down.");
 
             interaction.Select(tower);
             Assert.IsTrue(builder.TrySell(tower));
-            Assert.AreEqual(5 + refund, game.Session.Currency);
+            Assert.AreEqual(150 - invested + refund, game.Session.Currency);
             Assert.IsFalse(builder.TrySell(tower), "A tower can only be sold once.");
-            Assert.AreEqual(5 + refund, game.Session.Currency);
+            Assert.AreEqual(150 - invested + refund, game.Session.Currency);
 
             yield return null;
             Assert.IsTrue(tower == null, "The sold tower is removed.");
@@ -209,9 +292,10 @@ namespace ProjectTD.Tests
         }
 
         [UnityTest]
-        public IEnumerator SoldTower_StopsActing_WhileEnemiesAndProjectilesCarryOn()
+        public IEnumerator SoldSpecialisedTower_StopsActing_WhileEnemiesAndProjectilesCarryOn()
         {
             Tower tower = Place(NearSpawnSpot);
+            Assert.IsTrue(builder.TryUpgrade(tower, Rapid));
             Time.timeScale = 4f;
             game.StartNextWave();
             yield return WaitFor(() => tower.ShotsFired >= 2, 30f);

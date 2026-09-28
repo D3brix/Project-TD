@@ -302,28 +302,67 @@ MonoBehaviour:
   rangeIndicator: {fileID: 7571188448726277861}
   rangeFill: {fileID: 1298434226459818733}
   rangeRing: {fileID: 2851752473352948447}
+  baseSprite: {fileID: 8466357660998065297}
+  barrel: {fileID: 2406315627574996487}
   footprintRadius: 0.4
-  levels:
-  - label: Basic
+  baseLevel:
+    label: Basic
     cost: 25
     damage: 3
     attackInterval: 0.6
     range: 3
-  - label: Heavy Bolts
-    cost: 20
-    damage: 4.5
-    attackInterval: 0.6
-    range: 3
-  - label: Quick Reload
-    cost: 35
-    damage: 4.5
-    attackInterval: 0.45
-    range: 3
-  - label: Long Sights
-    cost: 50
-    damage: 6
-    attackInterval: 0.45
-    range: 3.6
+  branches:
+  - name: Rapid
+    strength: Fast attacks
+    weakness: Low hit damage
+    color: {r: 0.95, g: 0.7, b: 0.2, a: 1}
+    icon: {fileID: 21300000, guid: 80e640f3d33955d44a8030a732f71925, type: 3}
+    barrelScale: {x: 0.62, y: 0.1}
+    tiers:
+    - label: Rapid I
+      cost: 25
+      damage: 3
+      attackInterval: 0.34
+      range: 3
+    - label: Rapid II
+      cost: 45
+      damage: 3
+      attackInterval: 0.22
+      range: 3
+  - name: Heavy
+    strength: High hit damage
+    weakness: Slow attacks
+    color: {r: 0.6, g: 0.38, b: 0.8, a: 1}
+    icon: {fileID: 21300000, guid: 2258bc2990fb44d4397f8fefc827b867, type: 3}
+    barrelScale: {x: 0.42, y: 0.3}
+    tiers:
+    - label: Heavy I
+      cost: 25
+      damage: 12
+      attackInterval: 1.2
+      range: 3
+    - label: Heavy II
+      cost: 45
+      damage: 20
+      attackInterval: 1.3
+      range: 3
+  - name: Balanced
+    strength: Better all round, more range
+    weakness: No extreme strength
+    color: {r: 0.35, g: 0.72, b: 0.42, a: 1}
+    icon: {fileID: 21300000, guid: d10f9d742cb3e6f4f83f66af8712f768, type: 3}
+    barrelScale: {x: 0.55, y: 0.18}
+    tiers:
+    - label: Balanced I
+      cost: 25
+      damage: 4
+      attackInterval: 0.48
+      range: 3.4
+    - label: Balanced II
+      cost: 45
+      damage: 5.5
+      attackInterval: 0.45
+      range: 3.6
   targetingMode: 0
 --- !u!1 &4858683716726567184
 GameObject:

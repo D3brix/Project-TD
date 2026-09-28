@@ -48,7 +48,7 @@ namespace ProjectTD.Tests
 
             Assert.AreEqual(0, spawned, "Nothing spawns while the player is still preparing.");
             Assert.AreEqual(GamePhase.Preparation, game.Phase);
-            Assert.AreEqual("Wave: - / 5", HudText("TopBar/WaveText"));
+            Assert.AreEqual("WAVE - / 5", HudText("TopRight/WaveText"));
 
             Assert.IsTrue(game.StartNextWave());
             Assert.AreEqual(GamePhase.WaveRunning, game.Phase);
@@ -63,7 +63,7 @@ namespace ProjectTD.Tests
             game.Session.AddCurrency(200); // test setup: enough defence to clear wave 1 cleanly
             Tower a = Place(InsideHorseshoeSpot);
             Place(HorseshoeTopSpot);
-            builder.TryUpgrade(a);
+            builder.TryUpgrade(a, Rapid);
 
             Time.timeScale = TimeScale;
             Assert.IsTrue(game.StartNextWave());
@@ -78,7 +78,8 @@ namespace ProjectTD.Tests
             Assert.AreEqual(GamePhase.Preparation, game.Phase, "The next wave waits for the player.");
             Assert.AreEqual(1, game.Waves.CurrentWaveNumber);
             Assert.AreEqual(spawnedAfterWave1, spawned);
-            Assert.AreEqual("Start Wave 2", HudText("BottomBar/StartWaveButton/Label"));
+            Assert.AreEqual("Next Wave", HudText("TopRight/WaveButton/Label"));
+            Assert.IsFalse(game.AutoWave.IsCounting, "Auto Wave is off by default: no countdown.");
 
             Assert.IsTrue(game.StartNextWave());
             Assert.AreEqual(2, game.Waves.CurrentWaveNumber);
@@ -92,8 +93,9 @@ namespace ProjectTD.Tests
             yield return WaitFor(() => game.Waves.ActiveEnemies.Count > 0, 5f);
 
             Enemy enemy = game.Waves.ActiveEnemies[0];
+            float startTime = Time.time, startProgress = enemy.PathProgress, speed = enemy.MoveSpeed, endTime = 0f;
             int reachedEnd = 0;
-            enemy.ReachedEnd += _ => reachedEnd++;
+            enemy.ReachedEnd += _ => { reachedEnd++; endTime = Time.time; };
             var positions = new List<Vector2>();
             float lastProgress = 0f;
             while (enemy != null)
@@ -108,12 +110,13 @@ namespace ProjectTD.Tests
 
             Assert.AreEqual(1, reachedEnd);
             Assert.AreEqual(path.Length, lastProgress, 0.05f, "It walked the whole road.");
+            Assert.AreEqual((path.Length - startProgress) / speed, endTime - startTime, 0.5f, "Walking the road takes its length divided by the enemy's speed.");
             Assert.AreEqual(9, game.Session.Lives);
 
             float maxTurn = 0f;
             for (int i = 2; i < positions.Count; i++)
                 maxTurn = Mathf.Max(maxTurn, Vector2.Angle(positions[i - 1] - positions[i - 2], positions[i] - positions[i - 1]));
-            TestContext.WriteLine($"Road length {path.Length:0.0}, {positions.Count} frames, largest turn between frames {maxTurn:0.0} degrees.");
+            TestContext.WriteLine($"Road length {path.Length:0.0} at speed {speed:0.00}: {endTime - startTime:0.0} s, {positions.Count} frames, largest turn between frames {maxTurn:0.0} degrees.");
             Assert.Less(maxTurn, 25f, "No sudden changes of direction.");
         }
 
@@ -121,10 +124,11 @@ namespace ProjectTD.Tests
         public IEnumerator WithAScriptedDefense_BoughtWithTheRealEconomy_ThePlayerWinsAllWaves()
         {
             // The scripted player follows a fixed build order, doing each step as soon as it can afford it.
-            var plan = new List<(Vector2? spot, int upgradeIndex)>
+            // Upgrade steps name a tower (by build order) and a branch; the plan uses all three branches.
+            var plan = new List<(Vector2? spot, int tower, int branch)>
             {
-                (InsideHorseshoeSpot, -1), (RidgeBendSpot, -1), (null, 0), (null, 1), (HorseshoeTopSpot, -1), (null, 0), (null, 2),
-                (null, 1), (WestBankSpot, -1), (null, 0), (null, 2), (null, 1), (null, 3), (null, 3), (null, 2), (null, 3),
+                (InsideHorseshoeSpot, -1, -1), (RidgeBendSpot, -1, -1), (null, 0, Rapid), (HorseshoeTopSpot, -1, -1), (null, 1, Heavy),
+                (null, 0, Rapid), (null, 2, Balanced), (WestBankSpot, -1, -1), (null, 1, Heavy), (null, 2, Balanced), (null, 3, Rapid), (null, 3, Rapid),
             };
             var towers = new List<Tower>();
             int step = 0, spent = 0;
@@ -139,10 +143,10 @@ namespace ProjectTD.Tests
                     while (step < plan.Count)
                     {
                         int before = game.Session.Currency;
-                        (Vector2? spot, int upgradeIndex) = plan[step];
+                        (Vector2? spot, int tower, int branch) = plan[step];
                         bool done = spot.HasValue
                             ? AddIfPlaced(towers, builder.TryPlace(towerPrefab, spot.Value))
-                            : builder.TryUpgrade(towers[upgradeIndex]);
+                            : builder.TryUpgrade(towers[tower], branch);
                         if (!done)
                             break;
                         spent += before - game.Session.Currency;
@@ -230,9 +234,9 @@ namespace ProjectTD.Tests
             Assert.IsEmpty(builder.Towers);
             Assert.IsEmpty(Object.FindObjectsByType<Tower>());
             Assert.IsEmpty(Object.FindObjectsByType<Enemy>());
-            Assert.AreEqual("Lives: 10", HudText("TopBar/LivesText"));
-            Assert.AreEqual("Gold: 50", HudText("TopBar/CurrencyText"));
-            Assert.AreEqual("Wave: - / 5", HudText("TopBar/WaveText"));
+            Assert.AreEqual("10", HudText("TopLeft/LivesText"));
+            Assert.AreEqual("50", HudText("TopLeft/CurrencyText"));
+            Assert.AreEqual("WAVE - / 5", HudText("TopRight/WaveText"));
             Assert.IsNull(GameObject.Find("HUD/EndPanel"), "No end screen.");
 
             Assert.IsNotNull(builder.TryPlace(towerPrefab, InsideHorseshoeSpot), "The restarted level is playable.");
@@ -277,7 +281,8 @@ namespace ProjectTD.Tests
             Assert.IsNull(builder.TryPlace(towerPrefab, NearSpawnSpot), "No building after the game ends.");
             if (towers.Count > 0)
             {
-                Assert.IsFalse(builder.TryUpgrade(towers[0]), "No upgrades after the game ends.");
+                Assert.IsFalse(builder.TryUpgrade(towers[0], Rapid), "No upgrades after the game ends.");
+                Assert.IsFalse(builder.TryUpgrade(towers[0], Heavy), "No upgrades after the game ends.");
                 Assert.IsFalse(builder.TrySell(towers[0]), "No selling after the game ends.");
             }
             interaction.BeginPlacement(towerPrefab);

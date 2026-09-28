@@ -19,6 +19,20 @@ very large number of strategies.
 
 > **Individual towers are strong. Tower combinations are stronger.**
 
+### Upgrade paths describe how a tower attacks (prototype, Phase 2.5)
+
+A tower's upgrades are a choice of direction, not a fixed sequence that makes every
+fully upgraded tower the same. From its base level the player commits the tower to one
+path; the other paths are then closed for that tower (sell it and build another to
+change direction). The current prototype paths are:
+
+-   **Rapid** --- many light attacks. Scales attack speed; hits stay weak.
+-   **Heavy** --- few powerful attacks. Scales hit damage; stays slow and overkills.
+-   **Balanced** --- moderate gains in damage, speed and range, with no extreme.
+
+These describe *how* the attack is delivered, not an element, so a future element can
+combine differently with a Rapid tower than with a Heavy one.
+
 ------------------------------------------------------------------------
 
 ## 1. Tower Archetypes + Elements

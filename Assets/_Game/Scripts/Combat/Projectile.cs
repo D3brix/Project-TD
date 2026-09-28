@@ -19,6 +19,8 @@ namespace ProjectTD.Combat
         Vector2 destination;
         float age;
 
+        internal float Damage => damage;
+
         public void Launch(Enemy target, float damage)
         {
             this.target = target;

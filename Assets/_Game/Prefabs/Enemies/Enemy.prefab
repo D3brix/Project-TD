@@ -233,7 +233,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: ProjectTD::ProjectTD.Enemies.Enemy
   maxHealth: 10
-  moveSpeed: 1.5
+  moveSpeed: 1.8
   reward: 5
   livesCost: 1
 --- !u!114 &2582002615838159230

@@ -72,16 +72,23 @@ namespace ProjectTD.Towers
             return tower;
         }
 
-        public bool CanUpgrade(Tower tower) =>
-            !IsLocked && towers.Contains(tower) && !tower.Progression.IsMaxLevel && game.Session.CanAfford(tower.Progression.Next.cost);
+        /// <summary>Whether <paramref name="branchIndex"/> is open to this tower at all (ignoring gold): not another branch, not finished.</summary>
+        public bool IsUpgradeAvailable(Tower tower, int branchIndex) =>
+            !IsLocked && tower != null && towers.Contains(tower) && tower.Progression.NextIn(branchIndex) != null;
 
-        /// <summary>Buys the tower's next level. Returns false (nothing spent) at max level, when unaffordable, or after the game ends.</summary>
-        public bool TryUpgrade(Tower tower)
+        public bool CanUpgrade(Tower tower, int branchIndex) =>
+            IsUpgradeAvailable(tower, branchIndex) && game.Session.CanAfford(tower.Progression.NextIn(branchIndex).cost);
+
+        /// <summary>
+        /// Buys the next tier of <paramref name="branchIndex"/> (the first purchase commits the tower to that branch).
+        /// Returns false (nothing spent) for a closed or finished branch, when unaffordable, or after the game ends.
+        /// </summary>
+        public bool TryUpgrade(Tower tower, int branchIndex)
         {
-            if (!CanUpgrade(tower) || !game.Session.TrySpend(tower.Progression.Next.cost))
+            if (!CanUpgrade(tower, branchIndex) || !game.Session.TrySpend(tower.Progression.NextIn(branchIndex).cost))
                 return false;
 
-            return tower.ApplyUpgrade();
+            return tower.ApplyUpgrade(branchIndex);
         }
 
         public int SellValue(Tower tower) => tower.Progression.SellValue(sellRefundPercent);

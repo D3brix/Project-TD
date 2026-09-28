@@ -2,7 +2,7 @@
 
 High-level roadmap. Each phase should end with something playable and verified before the next one starts. Refine phases into tasks only when they begin.
 
-**Current phase: Phase 2, first interactive level (complete).** Next: to be decided by the game director (enemy variety and more waves are still open, see below).
+**Current phase: Phase 2.5, playtest revision (complete).** Next: the game director's manual playtest, then Phase 3 as decided.
 
 ## Phase 0: Project setup ✅
 - Unity 6.6 (`6000.6.3f1`) Universal 2D project at the repository root
@@ -41,6 +41,16 @@ Goal: turn the combat prototype into a level the player actively plays. Same sce
 Verified by EditMode tests (curve, placement rules, tower progression, spending, camera fit, level geometry) and PlayMode tests on the real scene (placement and economy, wave flow, a scripted full win paid for with the real economy, defeat and frozen end state, restart). Decisions: [Docs/Architecture.md](Docs/Architecture.md).
 
 Still open from the original Phase 2 outline (not started): ~10 waves, basic enemy variety (e.g. Fast, Armored, Regenerating), more starting tower types (e.g. Ballista, Cannon, Mage).
+
+## Phase 2.5: Playtest revision ✅
+Goal: fix what the director's playtest of Phase 2 found. No new towers, enemies, elements or progression.
+- Less dead travel time ✅ basic enemy speed 1.5 → 1.8 (+20%); map, road and build spots unchanged
+- Wave control ✅ manual Start/Next Wave (waits indefinitely), Auto Wave toggle (off by default) with a 3 s countdown after each wave resolves, Send Now during the countdown; one wave at a time
+- Branching upgrades ✅ the linear Heavy Bolts → Quick Reload → Long Sights sequence is gone; the tower commits to Rapid, Heavy or Balanced (2 tiers each, 25 / 45 gold), selling refunds 70% of everything invested
+- Gameplay HUD redesign ✅ lives/gold top left, wave controls top right, tower roster bottom left (click then click, or drag onto the map), contextual selected-tower panel with branch cards and stat previews, medieval styling; HUD clicks never reach the battlefield
+- Checked at 1920x1080, 1600x1200 and 2560x1080
+
+Verified by EditMode tests (branch progression, Auto Wave countdown) and PlayMode tests on the real scene (branch purchases and commitment, real firing rate and hit damage per branch, Auto Wave / Send Now / cancel / end state / restart, simulated-mouse HUD clicks and drag placement, HUD values). Decisions: [Docs/Architecture.md](Docs/Architecture.md).
 
 ## Phase 3: Elemental prototype
 - Fire

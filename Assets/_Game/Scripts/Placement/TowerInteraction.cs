@@ -7,7 +7,9 @@ namespace ProjectTD.Placement
 {
     /// <summary>
     /// The player's pointer on the battlefield. In placement mode a ghost tower with its range follows the cursor,
-    /// tinted by whether the spot is valid; left-click builds, right-click or Escape cancels.
+    /// tinted by whether the spot is valid; left-click builds, right-click or Escape cancels. Placement that began
+    /// with a press on a roster card also builds where the button is released, if that is over the map (drag to place).
+    /// Clicks on the HUD never reach the battlefield.
     /// Otherwise, clicking a built tower selects it (showing its range) and clicking empty ground deselects.
     /// All rules and money live in <see cref="TowerBuilder"/>; this class only turns input into requests.
     /// </summary>
@@ -23,13 +25,15 @@ namespace ProjectTD.Placement
         Tower ghost;
         SpriteRenderer[] ghostRenderers;
         Color[] ghostBaseColors;
+        bool dragging;
 
         public bool IsPlacing => placingPrefab != null;
         public Tower PlacingPrefab => placingPrefab;
         public PlacementResult PlacementState { get; private set; }
         public Tower Selected { get; private set; }
 
-        public void BeginPlacement(Tower prefab)
+        /// <param name="fromPress">Started by pressing (not yet releasing) a roster card: releasing over the map builds there.</param>
+        public void BeginPlacement(Tower prefab, bool fromPress = false)
         {
             CancelPlacement();
             ClearSelection();
@@ -37,6 +41,7 @@ namespace ProjectTD.Placement
                 return;
 
             placingPrefab = prefab;
+            dragging = fromPress;
             ghost = Instantiate(prefab, transform);
             ghost.name = "Placement Ghost";
             ghost.enabled = false; // a ghost never targets or fires
@@ -53,6 +58,7 @@ namespace ProjectTD.Placement
         public void CancelPlacement()
         {
             placingPrefab = null;
+            dragging = false;
             if (ghost != null)
                 Destroy(ghost.gameObject);
             ghost = null;
@@ -117,7 +123,13 @@ namespace ProjectTD.Placement
                 }
                 if (pointer.HasValue)
                     PreviewAt(pointer.Value);
-                if (click)
+                if (dragging && mouse != null && mouse.leftButton.wasReleasedThisFrame)
+                {
+                    dragging = false;
+                    if (!pointerOverUi && pointer.HasValue)
+                        ConfirmPlacement(pointer.Value); // dropped on the map; an invalid spot just stays in placement mode
+                }
+                else if (click)
                     ConfirmPlacement(pointer.Value);
                 return;
             }

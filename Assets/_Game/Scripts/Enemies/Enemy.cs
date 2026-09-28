@@ -25,6 +25,7 @@ namespace ProjectTD.Enemies
         public bool IsAlive => state != null && state.IsAlive;
         public float Health => state?.Health ?? 0f;
         public float MaxHealth => state?.MaxHealth ?? maxHealth;
+        public float MoveSpeed => moveSpeed;
         public int Reward => reward;
         public int LivesCost => livesCost;
         public Vector2 Position => transform.position;

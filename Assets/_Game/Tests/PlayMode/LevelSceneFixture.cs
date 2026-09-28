@@ -27,6 +27,9 @@ namespace ProjectTD.Tests
         protected static readonly Vector2 WestBankSpot = new Vector2(-2.7f, 2.1f);
         protected static readonly Vector2 NearSpawnSpot = new Vector2(-11.2f, 1.4f);
 
+        // The basic tower's development branches, in the order the prefab lists them.
+        protected const int Rapid = 0, Heavy = 1, Balanced = 2;
+
         protected GameController game;
         protected TowerBuilder builder;
         protected TowerInteraction interaction;

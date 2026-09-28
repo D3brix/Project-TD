@@ -17,16 +17,22 @@ namespace ProjectTD.Core
 
     /// <summary>
     /// Connects the waves to the session: kills pay currency, escaped enemies cost lives,
-    /// the player starts each wave, and it decides victory or defeat. When the game ends it halts the waves.
+    /// the player starts each wave (or lets Auto Wave start it after a short countdown), and it decides victory or defeat.
+    /// When the game ends it halts the waves.
     /// </summary>
     public class GameController : MonoBehaviour
     {
         [SerializeField] WaveSpawner waveSpawner;
         [SerializeField, Min(1)] int startingLives = 10;
         [SerializeField, Min(0)] int startingCurrency = 50;
+        [Tooltip("Auto Wave's state when the level (re)starts.")]
+        [SerializeField] bool autoWaveByDefault;
+        [Tooltip("Seconds between a wave resolving and the next one starting while Auto Wave is on.")]
+        [SerializeField, Min(0.5f)] float autoWaveDelay = 3f;
 
         public GameSession Session { get; private set; }
         public WaveSpawner Waves => waveSpawner;
+        public WaveCountdown AutoWave { get; private set; }
 
         /// <summary>Raised once, when the game ends in victory or defeat.</summary>
         public event Action<GameOutcome> GameEnded;
@@ -49,6 +55,13 @@ namespace ProjectTD.Core
         void Awake()
         {
             Session = new GameSession(startingLives, startingCurrency);
+            AutoWave = new WaveCountdown(autoWaveDelay, autoWaveByDefault);
+        }
+
+        void Update()
+        {
+            if (AutoWave.Tick(Time.deltaTime, CanStartNextWave))
+                StartNextWave();
         }
 
         void OnEnable()
@@ -65,10 +78,22 @@ namespace ProjectTD.Core
             waveSpawner.AllWavesCompleted -= HandleAllWavesCompleted;
         }
 
-        /// <summary>Starts the next wave, if the game is running and no wave is in progress.</summary>
+        /// <summary>
+        /// Starts the next wave, if the game is running and no wave is in progress. This is also Send Now:
+        /// it skips whatever is left of an Auto Wave countdown.
+        /// </summary>
         public bool StartNextWave()
         {
-            return CanStartNextWave && waveSpawner.StartNextWave();
+            if (!CanStartNextWave || !waveSpawner.StartNextWave())
+                return false;
+
+            AutoWave.Cancel();
+            return true;
+        }
+
+        public void SetAutoWave(bool enabled)
+        {
+            AutoWave.SetAuto(enabled);
         }
 
         /// <summary>Reloads the level from scratch: starting lives and currency, no towers, no enemies, wave 0.</summary>
@@ -100,6 +125,7 @@ namespace ProjectTD.Core
 
         void EndGame()
         {
+            AutoWave.Cancel();
             waveSpawner.Halt();
             GameEnded?.Invoke(Session.Outcome);
         }

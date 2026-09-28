@@ -22,7 +22,7 @@ Short record of decisions that shape the code. Add to it when a decision is made
 
 **Namespaces** follow the script folders: `ProjectTD.Core`, `.Enemies`, `.Towers`, `.Combat`, `.Waves`, `.Levels`, `.Placement` (Phase 2), `.UI`. All runtime code is in the `ProjectTD` assembly (`Assets/_Game/Scripts/ProjectTD.asmdef`). Tests are in `ProjectTD.Tests.EditMode` and `ProjectTD.Tests.PlayMode`.
 
-**HUD** uses uGUI legacy `Text` on a Screen Space - Camera canvas. This avoids importing TextMeshPro essentials for a throwaway HUD.
+**HUD** *(restyled in Phase 2.5)* uses uGUI legacy `Text` on a Screen Space - Camera canvas. This avoids importing TextMeshPro essentials for a throwaway HUD.
 
 ## Phase 2: first interactive level (2026-09-28)
 
@@ -36,7 +36,7 @@ Short record of decisions that shape the code. Add to it when a decision is made
 
 **`TowerBuilder` is the only way to spend on towers.** Buying, upgrading and selling all go through it, and it spends via `GameSession.TrySpend`, which refuses unaffordable amounts and anything after the game ends. So currency changes exactly once per action that actually happens. `TowerInteraction` only turns pointer input (Input System `Mouse`/`Keyboard`) into requests and shows the ghost. `Hud` only displays state and forwards button clicks.
 
-**Tower levels are a serialized table on the tower prefab.** `TowerLevel[]`: level 0 is the tower as built (its cost is the price), and later levels are upgrades. `TowerProgression` (pure) tracks level and total investment. Sell refund is a fixed 70% of everything invested, rounded down. There's still no ScriptableObject: with one tower type, the prefab is the definition. The HUD reads name, price and stats from the tower, and `TowerBuilder.AvailableTowers` lists what can be built, so a second tower type is another prefab in that list (plus a button).
+**Tower levels are a serialized table on the tower prefab.** *(Superseded in Phase 2.5 by branches.)* `TowerLevel[]`: level 0 is the tower as built (its cost is the price), and later levels are upgrades. `TowerProgression` (pure) tracks level and total investment. Sell refund is a fixed 70% of everything invested, rounded down. There's still no ScriptableObject: with one tower type, the prefab is the definition. The HUD reads name, price and stats from the tower, and `TowerBuilder.AvailableTowers` lists what can be built, so a second tower type is another prefab in that list (plus a button).
 
 **The player starts every wave.** `WaveSpawner.StartNextWave()` runs one wave and refuses while one is running. Wave completion is detected when the wave's last enemy is removed, not by a polling coroutine, so starting the next wave the instant one clears can't double-report.
 
@@ -47,3 +47,17 @@ Short record of decisions that shape the code. Add to it when a decision is made
 **The camera fits the battlefield.** `BattlefieldCamera` sizes the orthographic camera so the whole battlefield sits between the HUD's top and bottom bars at any aspect ratio (Phase 1's spawn marker was partly off-screen).
 
 **Economy (temporary numbers).** Combat numbers are unchanged from Phase 1 (enemy speed and HP, tower damage, fire rate, range, projectile speed, kill reward, spawn intervals of waves 1 to 3). New: tower price 25, starting gold 50 (two towers, or one plus its first upgrade), upgrades 20 / 35 / 50, and waves 4 and 5 (14 enemies at 2.5x HP, 16 at 3x). The price was lowered from a first try of 30 because the bigger, more open map gives each tower less road to cover than Phase 1's compact zigzag. A scripted player using the real economy wins all 5 waves with good placement, and loses on wave 4 with the same budget spent on weak spots.
+
+## Phase 2.5: pacing, wave control, branching upgrades, HUD (2026-09-28)
+
+**Pacing comes from enemy speed, not from the map.** The basic enemy walks at 1.8 (was 1.5). The road, battlefield and build spots are unchanged. Scripted runs chose the value: dead time before the first shot at the bridge horseshoe went from 8.7 s to 7.3 s, and a good build still wins while losing a life or so. Faster enemy types later have room above it.
+
+**Auto Wave is a pure countdown next to the controller.** `WaveCountdown` (pure, EditMode-tested) only knows "Auto on/off", "may a wave start now" and elapsed time: while Auto is on and a wave may start it counts down (3 s) and asks for a launch once. Anything that stops a wave from starting (a wave running, victory, defeat, no waves left) cancels it, so those invariants need no special cases. `GameController.Update` ticks it and launches through the same `StartNextWave` the button uses, which is also Send Now: starting a wave cancels the countdown, and the spawner refuses a second wave while one runs. Auto starts off and a restart (scene reload) resets it.
+
+**Upgrades are branches.** A tower has a base `TowerLevel` and `TowerBranch[]` (name, trade-off text, colour, HUD icon, barrel shape, tiers). `TowerProgression` (pure) tracks the committed branch and tier: the first upgrade commits, and `NextIn(branch)` is null for any other branch afterwards. `TowerBuilder.TryUpgrade(tower, branch)` stays the only way to pay. Stats are still absolute per tier. A specialised tower takes its branch's colour and barrel on the map, and projectiles scale with hit damage, so Rapid and Heavy look different in play.
+
+**HUD layout is fixed to the screen height.** The canvas scaler matches height, so the top (8%) and bottom (15%) HUD bands are a constant fraction of the screen, and `BattlefieldCamera` keeps the whole battlefield between them at any aspect ratio. Nothing but the end screen covers the map. The selected-tower panel lives in the bottom band only while a tower is selected. Its layout collapses to the committed branch's card.
+
+**Roster cards react on press.** `RosterCard` starts placement on pointer down, so click-then-click and press-drag-release both work. `TowerInteraction` builds on release only when placement began from a press and the pointer is over the map. Every battlefield click checks `EventSystem.IsPointerOverGameObject`, so HUD clicks never reach the world. PlayMode tests drive a simulated mouse through the real EventSystem (Input System `InputTestFixture`) to check this.
+
+**UI art is generated placeholder plus one font.** Panel, button, pill, heart, coin and branch-icon sprites are small generated PNGs in `Assets/_Game/Art/UI` (9-sliced dark wood with brass edges and corner rivets). Headings use Cinzel (SIL Open Font License, licence next to the font). Numbers and stat text use the built-in font, which has the arrow glyphs.
